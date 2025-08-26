@@ -42,9 +42,7 @@
 
 
 
-
-
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 from extensions import db, migrate, jwt
 from config import Config
@@ -61,8 +59,11 @@ def create_app():
     migrate.init_app(app, db)
     jwt.init_app(app)
 
-    # CORS - only allow your deployed frontend domain
-    CORS(app, origins=["https://hhs-hotel-demo-7fhz3.ondigitalocean.app"], supports_credentials=True)
+    # ✅ CORS - allow only your deployed frontend + localhost for testing
+    CORS(app, resources={r"/api/*": {"origins": [
+        "https://hhs-hotel-demo-7fhz3.ondigitalocean.app",
+        "http://localhost:3000"
+    ]}}, supports_credentials=True)
 
     # Blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -74,8 +75,3 @@ def create_app():
         return jsonify(status='ok')
 
     return app
-
-# Remove this in production! App Platform will use Gunicorn.
-# if __name__ == '__main__':
-#     app = create_app()
-#     app.run(debug=True)
