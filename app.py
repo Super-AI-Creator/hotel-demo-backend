@@ -79,10 +79,15 @@ def create_app():
     jwt.init_app(app)
 
     # ✅ CORS - allow only your deployed frontend + localhost for testing
-    CORS(app, resources={r"/api/*": {"origins": [
-        "https://hhs-hotel-demo-7fhz3.ondigitalocean.app",
-        "http://localhost:3000"
-    ]}}, supports_credentials=True)
+    CORS(app,
+        resources={r"/api/*": {"origins": [
+            "https://hhs-hotel-demo-7fhz3.ondigitalocean.app",
+            "http://localhost:3000"
+        ]}},
+        supports_credentials=True,
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"]
+    )
 
     # Blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
