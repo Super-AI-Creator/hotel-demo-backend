@@ -5,4 +5,5 @@ Flask-Migrate
 Flask-SQLAlchemy
 mysql-connector-python
 gunicorn
+passlib
 # any other dependencies you use
