@@ -23,7 +23,9 @@ class User(db.Model):
     role = db.Column(SAEnum(UserRole), default=UserRole.HOTEL, nullable=False)
     status = db.Column(SAEnum(UserStatus), default=UserStatus.PENDING, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
+    token = db.Column(db.String(255), nullable=False)
+    refresh_token = db.Column(db.String(255), nullable=False)
+    token_refresh_date = db.Column(db.DateTime)
     # hotels = db.relationship('Hotel', backref='owner', lazy=True)
 
 

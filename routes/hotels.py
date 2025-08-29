@@ -13,39 +13,41 @@ def _is_admin(jwt_claims):
     return jwt_claims['role'] == UserRole.ADMIN.value
 
 
-@hotels_bp.post('')
-@jwt_required()
-def create_hotel():
-    claims = get_jwt()
-    data = request.get_json() or {}
+# @hotels_bp.post('')
+# @jwt_required()
+# def create_hotel():
+#     claims = get_jwt()
+#     data = request.get_json() or {}
 
-    user_id = get_jwt_identity()
-    hotel = Hotel(
-        owner_id=str(user_id),
-        name=data['name'],
-        address=data.get('address'),
-        timezone=data.get('timezone', 'UTC'),
-        beds24_prop_key=data['beds24_prop_key'],
-        beds24_api_key=data['beds24_api_key'],
-        ttlock_client_id=data.get('ttlock_client_id'),
-        ttlock_client_secret=data.get('ttlock_client_secret'),
-        ttlock_uesr_id=data.get('ttlock_uesr_id'),
-        ttlock_user_password=data.get('ttlock_user_password'),
-        default_checkin_time=data.get('default_checkin_time', '14:00'),
-        default_checkout_time=data.get('default_checkout_time', '10:00'),
-        pin_length=int(data.get('pin_length', 4)),
-    )
-    db.session.add(hotel)
-    db.session.commit()
-    return jsonify(id=hotel.id), 201
+#     user_id = get_jwt_identity()
+#     hotel = Hotel(
+#         owner_id=str(user_id),
+#         name=data['name'],
+#         address=data.get('address'),
+#         timezone=data.get('timezone', 'UTC'),
+#         beds24_prop_key=data['beds24_prop_key'],
+#         beds24_api_key=data['beds24_api_key'],
+#         ttlock_client_id=data.get('ttlock_client_id'),
+#         ttlock_client_secret=data.get('ttlock_client_secret'),
+#         ttlock_uesr_id=data.get('ttlock_uesr_id'),
+#         ttlock_user_password=data.get('ttlock_user_password'),
+#         default_checkin_time=data.get('default_checkin_time', '14:00'),
+#         default_checkout_time=data.get('default_checkout_time', '10:00'),
+#         pin_length=int(data.get('pin_length', 4)),
+#     )
+#     db.session.add(hotel)
+#     db.session.commit()
+#     return jsonify(id=hotel.id), 201
 
 
-@hotels_bp.get('/')
+@hotels_bp.post('/list_hotels')
 @jwt_required()
 def list_hotels():
+    body = request.get_json() or {}
     user_id = get_jwt_identity()
     claims = get_jwt()
-    hotel_list = get_hotels()
+    pms_token = body.get('pms') 
+    hotel_list = get_hotels(pms_token)
     hotel_real_list = []
     print(user_id)
     if _is_admin(claims):
@@ -124,9 +126,11 @@ def update_hotel(hotel_id):
     return jsonify(message='updated')
 
 
-@hotels_bp.get('/<int:hotel_id>/locks')
+@hotels_bp.post('/<int:hotel_id>/locks')
 @jwt_required()
 def get_locks(hotel_id):
+    body = request.get_json() or {}
+    pms_token = body.get('pms') 
     claims = get_jwt()
     hotel = hotel = Hotel.query.filter_by(hotel_id=hotel_id).first()
     user_id = get_jwt_identity()
@@ -145,6 +149,8 @@ def get_locks(hotel_id):
 @hotels_bp.get('/<int:hotel_id>/rooms')
 @jwt_required()
 def get_rooms(hotel_id):
+    body = request.get_json() or {}
+    pms_token = body.get('pms') 
     claims = get_jwt()
     rooms = RoomLockMatch.query.filter_by(hotel_id=hotel_id).all()  # use .all()
     

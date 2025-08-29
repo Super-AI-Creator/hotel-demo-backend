@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from extensions import db
 from models import Hotel, BookingSyncLog, UserRole, BookingAutoHistory, RoomLockMatch
-from integrations.beds24 import Beds24Client, get_auto_bookings
+from integrations.beds24 import Beds24Client, get_auto_bookings, check_and_refresh_token
 from integrations.ttlock import TTLockClient
 from typing import Optional
 
@@ -84,9 +84,9 @@ def _default_dates(body):
         end_iso = (today + timedelta(days=7)).date().isoformat()
     return start_iso, end_iso
 
-def _fetch_beds24_bookings(hotel: Hotel, payload: dict):
+def _fetch_beds24_bookings(hotel: Hotel, payload: dict, pms: str):
     beds = Beds24Client(hotel.beds24_api_key, hotel.beds24_prop_key)
-    bookings = beds.get_bookings(payload)
+    bookings = beds.get_bookings(payload, pms)
     return bookings
 
 def _map_booking_preview(b):
@@ -108,6 +108,7 @@ def list_bookings(hotel_id):
     Preview-only endpoint: fetch bookings for the date window (no TTLock).
     Body: { start?: YYYY-MM-DD, end?: YYYY-MM-DD, hotelId?: number }
     """
+    print("!2312312")
     hotel, err = _auth_hotel_or_owner(hotel_id)
     if err:
         return err
@@ -118,9 +119,10 @@ def list_bookings(hotel_id):
     payload_json = body
     payload_json.pop("hotelId", None)
     payload_json["propertyId"] = property_id
-    print(property_id)
+    pms_token = body.get('pms') 
+    print(pms_token)
     try:
-        bookings = _fetch_beds24_bookings(hotel, payload_json)
+        bookings = _fetch_beds24_bookings(hotel, payload_json, pms_token)
     except Exception as e:
         return jsonify(message='beds24 fetch failed', error=str(e)), 502
 
@@ -130,9 +132,19 @@ def list_bookings(hotel_id):
 
 
 
-@sync_bp.get('/auto_trigger')
+@sync_bp.post('/auto_trigger')
 def auto_trigger():
-    bookings = get_auto_bookings()
+    body = request.get_json() or {}
+    pms_token = body.get('pms') 
+
+    print("--------------------------------------------------------------")
+    print(pms_token)
+    refresh_result = check_and_refresh_token(pms_token)
+    if refresh_result=="error":
+        return jsonify(processed=[], count=-1, msg="There happened error while processing token. Plz ask server team.")
+    if refresh_result!= "error" and refresh_result!="success":
+        return jsonify(processed=[], count=-2, token = refresh_result,  msg="The PMS token updated successfuly.")
+    bookings = get_auto_bookings(pms_token)
     # print(bookings)
     processed = []
     for b in bookings:
@@ -221,7 +233,7 @@ def auto_trigger():
                 processed.append({'booking': booking_no, 'pin': pin_code, 'status': status, 'msg': msg})
 
     db.session.commit()
-    return jsonify(processed=processed, count=len(processed))
+    return jsonify(processed=processed, count=len(processed), msg="success")
 
 @sync_bp.post('/trigger/<int:hotel_id>')
 @jwt_required()
@@ -241,9 +253,10 @@ def trigger_sync(hotel_id):
     payload_json = body
     payload_json.pop("hotelId", None)
     payload_json["propertyId"] = property_id
+    pms_token = body.get('pms') 
     
     try:
-        bookings = _fetch_beds24_bookings(hotel, payload_json)
+        bookings = _fetch_beds24_bookings(hotel, payload_json, pms_token)
     except Exception as e:
         return jsonify(message='beds24 fetch failed', error=str(e)), 502
 

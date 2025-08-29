@@ -1,13 +1,97 @@
 import requests
 from flask import current_app
+from models import User
+from extensions import db
+from datetime import datetime, timezone, timedelta
 import json
-pms_token = "9ZKVmZHUdgKKPWpl/tBmF4SP9QIBOY72Iw99ARUho3RHTkcnZnAnly3CLKTopaIp8a7pcTIi2z5IPc5zMPJwdqDAp1vrwK7zRjnh0K3PU8IZYFnGFrv19DJy0ldCU/6IwxI5WMlb4vPXNf0YRNel0f4R5CUFNZGrzVWC0Zoeb38="
+pms_token = ""
 
-def get_users():
+def set_pms(token):
+    global pms_token
+    pms_token = token
+
+def update_token(refreshToken):
+    url = "https://beds24.com/api/v2/authentication/token"
+    # code = invite_code
+    headers = {
+        "accept": "application/json",
+        "refreshToken" : refreshToken
+    }
+    params = {}
+    response = requests.get(url, headers=headers, params=params)
+    status = response.status_code
+    result = json.loads(response.text)
+    final_result={}
+    if status==200:
+        final_result = {
+            "success":"success",
+            "token":result["token"]
+        }
+    else:
+        final_result = {
+            "success":"error",
+        }
+    return final_result
+    
+def check_and_refresh_token(pms):
+    if pms != "":
+        # Find the user with the matching token
+        user = User.query.filter_by(token=pms).first()
+        if user and hasattr(user, 'token_refresh_date'):
+            now = datetime.now(timezone.utc)
+            # Ensure token_refresh_date is timezone-aware
+            refresh_date = user.token_refresh_date
+            if refresh_date.tzinfo is None:
+                refresh_date = refresh_date.replace(tzinfo=timezone.utc)
+            diff = now - refresh_date
+            if diff > timedelta(hours=23):
+                result = update_token(user.refresh_token)
+                if result["success"]=="success":
+                    user.token = result["token"]
+                    user.token_refresh_date = now
+                    set_pms(result["token"])
+                    db.session.commit()
+                    return result["token"]
+                else:
+                    return "error"
+            else:
+                return "success"
+                    
+     
+def get_token_from_invite_code(invite_code):
+    url = "https://beds24.com/api/v2/authentication/setup"
+    code = invite_code
+    headers = {
+        "accept": "application/json",
+        "code" : code
+    }
+    params = {}
+    response = requests.get(url, headers=headers, params=params)
+    status = response.status_code
+    result = json.loads(response.text)
+
+    final_result = {}
+    print(result)
+    if status==200: 
+        final_result = {
+            "success":"valid",
+            "token":result["token"],
+            "refreshToken":result["refreshToken"]
+        }
+    else:
+        final_result = {
+            "success":"invalid",
+            "msg":result["error"]
+        }
+    return final_result
+
+def get_users(pms):
+    # print("0000000000000000")
+    # print(pms_token)
     url = "https://beds24.com/api/v2/accounts"
     headers = {
         "accept": "application/json",
-        "token": pms_token
+        "token": pms
     }
     params = {}
     response = requests.get(url, headers=headers, params=params)
@@ -15,11 +99,12 @@ def get_users():
     data = result['data']
     return data
 
-def get_hotels():
+def get_hotels(pms):
+    print(pms)
     url = "https://beds24.com/api/v2/properties"
     headers = {
         "accept": "application/json",
-        "token": pms_token
+        "token": pms
     }
     params = {}
     response = requests.get(url, headers=headers, params=params)
@@ -27,12 +112,12 @@ def get_hotels():
     data = result['data']
     return data
 
-def get_auto_bookings():
+def get_auto_bookings(pms):
     url = "https://api.beds24.com/v2/bookings"
 
     headers = {
         "accept": "application/json",
-        "token": pms_token
+        "token": pms
     }
     params = { }
     response = requests.get(url, headers=headers, params=params)
@@ -59,7 +144,7 @@ class Beds24Client:
     
     
     
-    def get_bookings(self, payload = None):
+    def get_bookings(self, payload = None, pms = None):
         """Fetch bookings filtered by property and optional date window.
         NOTE: Endpoint path/params may differ; verify with Swagger.
         """
@@ -74,7 +159,7 @@ class Beds24Client:
         url = f"{self.base_url}/bookings"
         headers = {
             "accept": "application/json",
-            "token": pms_token
+            "token": pms
         }
         # print("999999")
         # print(payload)
